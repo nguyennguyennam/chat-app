@@ -47,20 +47,5 @@ public class ReceiveMessage
         {
             throw new InvalidOperationException("WebSocket error occurred: " + wse.Message);
         }
-        
-        // while (_Client.State == WebSocketState.Open)
-        // {
-        //     WebSocketReceiveResult result = await _Client.ReceiveAsync(new ArraySegment<byte>(receiveBuffer), CancellationToken.None);
-        //     if (result.MessageType == WebSocketMessageType.Text)
-        //     {
-        //         string receivedMessage = System.Text.Encoding.UTF8.GetString(receiveBuffer, 0, result.Count);
-        //         Console.WriteLine($"Received: {receivedMessage}");
-        //     }
-        //     else
-        //     {
-        //         Console.WriteLine("WebSocket is not connected.");
-        //         throw new InvalidOperationException("WebSocket is not connected.");
-        //     }
-        // } 
     }
 }

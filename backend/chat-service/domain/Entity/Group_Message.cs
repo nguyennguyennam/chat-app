@@ -6,14 +6,14 @@ namespace chat_service.domain.Entity;
 public class Groups_Message
 {
     public Guid GroupId { get; private set; }
-    public Guid MessageId { get; private set; }
     public Guid SenderId { get; private set; }
     public DateTime SentAt { get; private set; }
+    public Message_Content Message { get; private set; }
 
-    public Groups_Message (Guid groupId, Guid messageId, Guid senderId)
+    public Groups_Message (Guid groupId, Message_Content message , Guid senderId)
     {
         GroupId = groupId;
-        MessageId = messageId;
+        Message = message;
         SenderId = senderId;
         SentAt = DateTime.UtcNow;
     }

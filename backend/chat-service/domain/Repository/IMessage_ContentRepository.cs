@@ -1,6 +1,7 @@
 using chat_service.domain.Entity;
 namespace chat_service.domain.Repository;
 using System;
+using System.Text.RegularExpressions;
 
 
 /*
@@ -9,17 +10,17 @@ using System;
 public interface IChatRepository
 {
     //Core Methods
-    Task<Message_Content> SendMessage(Message_Content message, Guid GroupId, Guid SenderId);
-    Task<Message_Content?> EditMessage(Guid MessageId, string newContent);
-    Task<Message_Content?> GetMessageById(Guid MessageId);
-    Task DeleteMessage(Guid MessageId);
+    Task<Groups_Message> SendMessage(Groups_Message message);
+    Task<Groups_Message>  EditMessage(Guid GroupId, Guid messageId,  string newContent);
+    Task<Groups_Message> GetMessageById(Guid GroupId, Guid MessageId);
+    Task DeleteMessage(Guid GroupId, Guid MessageId);
 
     //Query methods
-    Task<List<Message_Content>> GetMessagesByGroup(Guid GroupId, int limit, int offset);
-    Task<List<Message_Content?>> SearchMessages(Guid GroupId, string keyword);
+    Task<List<Groups_Message>> GetMessagesByGroup(Guid GroupId, int limit, int offset);
+    Task<List<Groups_Message>> SearchMessages(Guid GroupId, string keyword);
 
     //Status Methods
-    Task<Message_Content?> UpdateMessageStatus(Guid MessageId, string status, Guid userId);
-    Task<Message_Content> GetMessageStatus(Guid messageId, Guid userId);
+    Task<Groups_Message?> UpdateMessageStatus(Guid GroupId, Guid MessageId, string status);
+    Task<Groups_Message> GetMessageStatus(Guid GroupId, Guid messageId);
 
 }
