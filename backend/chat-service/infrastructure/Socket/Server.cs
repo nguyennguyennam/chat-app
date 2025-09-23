@@ -24,7 +24,18 @@ public class WebSocketServer
             HttpListenerContext context = await listener.GetContextAsync();
             if (context.Request.IsWebSocketRequest)
             {
-                await ProcessRequestAsync(context);
+                // Do not await here — process each connection concurrently so the listener can accept more clients
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ProcessRequestAsync(context);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"WebSocket connection processing error: {ex}");
+                    }
+                });
             }
             else
             {
@@ -44,7 +55,7 @@ public class WebSocketServer
         Console.WriteLine("WebSocket connection established.");
 
 
-        //Handle incoming messages, Open or Closed
+        //Handle incoming messages (accumulate frames into MemoryStream and use the full message bytes)
         byte[] buffer = new byte[1024];
         while (webSocket.State == WebSocketState.Open)
         {
@@ -56,13 +67,15 @@ public class WebSocketServer
                 ms.Write(buffer, 0, result.Count);
             }
             while (!result.EndOfMessage);
+
             if (result.MessageType == WebSocketMessageType.Text)
             {
-                string receivedMessage = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+                var messageBytes = ms.ToArray();
+                string receivedMessage = System.Text.Encoding.UTF8.GetString(messageBytes);
                 Console.WriteLine($"Received: {receivedMessage}");
 
-                //Echo back the received message to the client
-                await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), WebSocketMessageType.Text, result.EndOfMessage, CancellationToken.None);
+                // Echo back the received message to the client using the full message bytes
+                await webSocket.SendAsync(new ArraySegment<byte>(messageBytes, 0, messageBytes.Length), WebSocketMessageType.Text, true, CancellationToken.None);
             }
             //Handle Close message
             else if (result.MessageType == WebSocketMessageType.Close)

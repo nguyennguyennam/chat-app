@@ -1,100 +1,137 @@
 /*
-    This file implements the IMessage_ContentRepository interface to provide data access methods for Message_Content entity.
+    This file implements the IChatRepository interface to provide 
+    data access methods for Message_Content entity.
 */
 
 using chat_service.domain.Repository;
 using chat_service.domain.Entity;
+using chat_service.infrastructure.Models;
 using chat_service.infrastructure.Utility.Database;
-namespace chat_service.infrastructure.Repository;
+using Cassandra;
 
-public class MessageCore : IChatRepository
+namespace chat_service.infrastructure.Repository
 {
-    private readonly CassandraDb _db;
-    public MessageCore(CassandraDb db)
-    {
-        _db = db;
-    }
-
     /*
-        Send messages and store them in the database.
-        Parameters: message - The message entity to be sent and stored.
-        Returns: The sent message entity with updated information (e.g, timestamps, IDs).
+        Repository implementation for handling message operations in Cassandra.
+        This class interacts with the `message_content_by_group` table to perform CRUD 
+        and query operations for chat messages.
     */
-
-    public async Task<Groups_Message> SendMessage(Groups_Message message)
+    public class MessageRepository : IChatRepository
     {
-        // Implementation for sending a message
-        await _db.GetMapper().InsertAsync(message);
-        return message;
-    }
+        private readonly CassandraDb _db;
 
-    /*
-        Edit an existing message's content.
-        Parameters: GroupId - The ID of the group where the message was sent.
-                    messageId - The ID of the message to be edited.
-                    newContent - The new content to replace the existing message content.
-        Returns: The updated message entity after editing.
-    */
-
-    public async Task<Groups_Message> EditMessage(Guid groupId, Guid messageId, string newContent)
-    {
-        await _db.GetMapper().UpdateAsync<Groups_Message>($"SET Message.ContentText = {newContent} WHERE GroupId = {groupId} and MessageId = {messageId}");
-        return await GetMessageById(groupId, messageId) ?? throw new Exception("Message not found after update");
-    }
-
-    /*
-        Retrieve a message by its ID.
-        Parameters: GroupId - The ID of the group where the message was sent.
-                    MessageId - The ID of the message to be retrieved.
-        Returns: The message entity if found, otherwise null.
-    */
-    public async Task<Groups_Message?> GetMessageById(Guid groupId, Guid messageId)
-    {
-        return await _db.GetMapper().FirstOrDefaultAsync<Groups_Message>($"WHERE GroupId ={groupId} and MessageId = {messageId}");
-    }
-
-    public async Task DeleteMessage(Guid groupId, Guid messageId)
-    {
-        await _db.GetMapper().DeleteAsync<Groups_Message>($"WHERE GroupId = {groupId} and MessageId = {messageId}");
-    }
-
-    /*
-        Retrieve messages for a specific group with pagination.
-        Parameters: GroupId - The ID of the group to retrieve messages from.
-                    before - Cursor, the last message from the viewed page size
-                    pageSize - A number of messages for every scroll
-        Returns: A list of message entities for the specified group.
-    */
-    public async Task<List<Groups_Message>> GetMessagesByGroup(Guid groupId, DateTime? before, int pageSize)
-    {
-        string cql;
-        object[] parameters;
-        if (before.HasValue)
+        public MessageRepository(CassandraDb db)
         {
-            // Fetch older messages
-            cql = "WHERE GroupId = ? AND SentAt < ? LIMIT ?";
-            parameters = new object[] { groupId, before, pageSize };
+            _db = db;
         }
-        else
+
+        /*
+            Insert a new message into the database.
+        */
+        public async Task<Groups_Message> SendMessage(Groups_Message message)
         {
-            cql = "WHERE GroupId = ? LIMIT ?";
-            parameters = new object[] { groupId, pageSize };
+            if (message.Message == null)
+                throw new ArgumentNullException(nameof(message.Message), "Message content cannot be null when sending a message");
+
+            var cqlMsg = new Groups_Message_Cql
+            {
+                GroupId = message.GroupId,
+                SenderId = message.SenderId,
+                SentAt = message.SentAt,
+                MessageId = message.Message.MessageId,
+                ContentType = message.Message.ContentType_?.Value.ToString() ?? string.Empty,
+                ContentText = message.Message.ContentText,
+                ContentUrl = message.Message.ContentURL,
+                MimeType = message.Message.MimeType,
+                SizeBytes = message.Message.Size_Bytes,
+                Metadata = message.Message.Metadata?.RootElement.GetRawText() ?? "{}",
+                Status = message.Message.Status?.Value.ToString() ?? "Sent"
+            };
+
+            await _db.GetMapper().InsertAsync(cqlMsg);
+            return message;
         }
-        var messages = await _db.GetMapper().FetchAsync<Groups_Message>(cql, parameters);
-        return messages.ToList();
-    }
-    
 
-    /*
-        Search messages in a specific group by keyword.
-        Parameters: GroupId - The ID of the group to search messages in.
-                    keyword - The keyword to search for within message contents.
-        Returns: A list of message entities that match the search criteria.
-    */
-    public async Task<List<Groups_Message>> SearchMessages(Guid groupId, string keyword)
-    {
-        
-    }
-    
+        /*
+            Edit an existing message content.
+        */
+        public async Task<Groups_Message> EditMessage(Guid groupId, Guid messageId, string newContent)
+        {
+            var cql = "UPDATE message_content_by_group SET content_text = ?, status = 'Sent' " +
+                      "WHERE group_id = ? AND message_id = ?";
+            await _db.GetSession().ExecuteAsync(new SimpleStatement(cql, newContent, groupId, messageId));
+            return await GetMessageById(groupId, messageId) ?? throw new Exception("Message not found");
+        }
 
+        /*
+            Retrieve a specific message by its groupId and messageId.
+        */
+        public async Task<Groups_Message> GetMessageById(Guid groupId, Guid messageId)
+        {
+            var cql = "SELECT * FROM message_content_by_group WHERE group_id = ? AND message_id = ?";
+            var result = await _db.GetMapper().FirstOrDefaultAsync<Groups_Message>(cql, groupId, messageId);
+            return result ?? throw new Exception("Message not found");
+        }
+
+        /*
+            Delete a message from the database.
+        */
+        public async Task DeleteMessage(Guid groupId, Guid messageId)
+        {
+            var cql = "DELETE FROM message_content_by_group WHERE group_id = ? AND message_id = ?";
+            await _db.GetSession().ExecuteAsync(new SimpleStatement(cql, groupId, messageId));
+        }
+
+        /*
+            Retrieve messages for a group with cursor-based pagination.
+        */
+        public async Task<List<Groups_Message>> GetMessagesByGroup(Guid groupId, DateTime? before, int pageSize = 15)
+        {
+            string cql;
+            object[] parameters;
+
+            if (before.HasValue)
+            {
+                cql = "SELECT * FROM message_content_by_group WHERE group_id = ? AND sent_at < ? LIMIT ?";
+                parameters = new object[] { groupId, before.Value, pageSize };
+            }
+            else
+            {
+                cql = "SELECT * FROM message_content_by_group WHERE group_id = ? LIMIT ?";
+                parameters = new object[] { groupId, pageSize };
+            }
+
+            var messages = await _db.GetMapper().FetchAsync<Groups_Message>(cql, parameters);
+            return messages.ToList();
+        }
+
+        /*
+            Search messages within a group by keyword.
+            ⚠ Requires SASI index on `content_text` (disabled by default in Cassandra 4.1).
+        */
+        public async Task<List<Groups_Message>> SearchMessages(Guid groupId, string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword))
+                return new List<Groups_Message>();
+
+            var cql = "SELECT * FROM message_content_by_group WHERE group_id = ? AND content_text LIKE ? LIMIT 50";
+            var results = await _db.GetMapper().FetchAsync<Groups_Message>(
+                cql,
+                groupId,
+                "%" + keyword + "%"
+            );
+
+            return results.ToList();
+        }
+
+        /*
+            Update the status of a message (e.g., Sent, Delivered, Seen).
+        */
+        public async Task<Groups_Message> UpdateMessageStatus(Guid groupId, Guid messageId, string status)
+        {
+            var cql = "UPDATE message_content_by_group SET status = ? WHERE group_id = ? AND message_id = ?";
+            await _db.GetSession().ExecuteAsync(new SimpleStatement(cql, status, groupId, messageId));
+            return await GetMessageById(groupId, messageId) ?? throw new Exception("Message not found");
+        }
+    }
 }

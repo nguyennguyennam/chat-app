@@ -16,11 +16,10 @@ public interface IChatRepository
     Task DeleteMessage(Guid GroupId, Guid MessageId);
 
     //Query methods
-    Task<List<Groups_Message>> GetMessagesByGroup(Guid GroupId, int limit, int offset);
+    Task<List<Groups_Message>> GetMessagesByGroup(Guid groupId, DateTime? before, int pageSize = 15);
     Task<List<Groups_Message>> SearchMessages(Guid GroupId, string keyword);
 
     //Status Methods
-    Task<Groups_Message?> UpdateMessageStatus(Guid GroupId, Guid MessageId, string status);
-    Task<Groups_Message> GetMessageStatus(Guid GroupId, Guid messageId);
+    Task<Groups_Message> UpdateMessageStatus(Guid GroupId, Guid MessageId, string status);
 
 }

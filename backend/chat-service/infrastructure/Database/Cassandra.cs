@@ -16,7 +16,7 @@
         private readonly IMapper _mapper;
         private static readonly string _keyspace = "chat_app";
         private static readonly string _table = "messages";
-        private static readonly string _contactPoint = "cassandra"; // Docker service name
+        private static readonly string _contactPoint = "localhost"; 
         private static readonly int _port = 9042;
         private static readonly string _username = "groupchat_cassandra";
         private static readonly string password = "hello_world";
@@ -24,19 +24,14 @@
 
         public CassandraDb()
     {
-            var SSLOptions = new SSLOptions(
-            SslProtocols.Tls12,
-            true,
-            (sender, certificate, chain, sslPolicyErrors) => true // Accept all certificates (for development purposes only)
-        );
+
             var cluster = Cluster.Builder()
                 .AddContactPoint(_contactPoint)
                 .WithPort(_port)
                 .WithCredentials(_username, password)
-                .WithSSL(SSLOptions)
                 .Build();
             // Initialize the session and mapper
-            _session = cluster.Connect(_keyspace);
+            _session = cluster.Connect();
 
 
             //Make sure the keyspace exists
