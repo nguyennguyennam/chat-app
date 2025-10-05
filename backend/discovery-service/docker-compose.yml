@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  consul-server-1:
+    image: consul:latest
+    container_name: consul-server-1
+    restart: always
+    networks:
+      - consul-network
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+      - "8600:8600/tcp"
+    command: agent -server -ui -bootstrap-expect=3 -node=consul-server-1 -client=0.0.0.0
+    volumes:
+      - consul-data-1:/consul/data
+  
+  consul-server-2:
+    image: consul:latest
+    container_name: consul-server-2
+    restart: always
+    networks:
+      - consul-network
+    command: agent -server -bootstrap-expect=3 -node=consul-server-2 -client=0.0.0.0 -retry-join=consul-server-1
+    volumes:
+      - consul-data-2:/consul/data
+  
+  consul-server-3:
+    image: consul:latest
+    container_name: consul-server-3
+    restart: always
+    networks:
+      - consul-network
+    command: agent -server -bootstrap-expect=3 -node=consul-server-3 -client=0.0.0.0 -retry-join=consul-server-1
+    volumes:
+      - consul-data-3:/consul/data
+
+  consul-client1:
+    image: consul:latest
+    container_name: consul-client1
+    restart: always
+    networks:
+      - consul-network
+    command: agent -node=consul-client1 -client=0.0.0.0 -retry-join=consul-server-1
+    volumes:
+      - consul-client-data-1:/consul/data
+
+  consul-client2:
+    image: consul:latest
+    container_name: consul-client2
+    restart: always
+    networks:
+      - consul-network
+    command: agent -node=consul-client2 -client=0.0.0.0 -retry-join=consul-server-1
+    volumes:
+      - consul-client-data-2:/consul/data
+
+  consul-client3:
+    image: consul:latest
+    container_name: consul-client3
+    restart: always
+    networks:
+      - consul-network
+    command: agent -node=consul-client3 -client=0.0.0.0 -retry-join=consul-server-1
+    volumes:
+      - consul-client-data-3:/consul/data
+
+volumes:
+  consul-data-1:
+  consul-data-2:
+  consul-data-3:
+  consul-client-data-1:
+  consul-client-data-2:
+  consul-client-data-3:
+
+networks:
+  consul-network:
+    driver: bridge
